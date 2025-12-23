@@ -1,48 +1,44 @@
-name: Daily Learning Update
+name: Daily Learning Auto Sync
 
 on:
   schedule:
-    # Runs every day at 12:00 AM IST
+    # Runs daily at 12:00 AM IST
     - cron: "30 18 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  update-log:
+  auto-sync:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Decide learning phase
-        run: |
-          START_DATE="2024-12-20"
-          TODAY=$(date +%s)
-          START=$(date -d $START_DATE +%s)
-          DIFF=$(( (TODAY - START) / 86400 ))
-
-          if [ $DIFF -lt 17 ]; then
-            echo "PHASE=AWS" >> $GITHUB_ENV
-          elif [ $DIFF -ge 21 ]; then
-            echo "PHASE=DSA" >> $GITHUB_ENV
-          else
-            echo "PHASE=BREAK" >> $GITHUB_ENV
-          fi
-
-      - name: Update AWS CP log
-        if: env.PHASE == 'AWS'
-        run: |
-          echo "- $(date '+%Y-%m-%d'): AWS CP (CLF-02) study – services, pricing, practice questions" >> "AWS-CP(CLF-02)/aws-cp-log.md"
-
-      - name: Update DSA log
-        if: env.PHASE == 'DSA'
-        run: |
-          echo "- $(date '+%Y-%m-%d'): DSA practice (Java – arrays / basics / LeetCode)" >> "DSA(JAVA)/dsa-java-log.md"
-
-      - name: Commit and push
-        if: env.PHASE != 'BREAK'
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync with remote
+        run: |
+          git pull --rebase origin main
+
+      - name: Check for changes
+        run: |
+          if git diff --quiet; then
+            echo "NO_CHANGES=true" >> $GITHUB_ENV
+          else
+            echo "NO_CHANGES=false" >> $GITHUB_ENV
+          fi
+
+      - name: Commit and push changes
+        if: env.NO_CHANGES == 'false'
+        run: |
           git add .
-          git commit -m "Daily learning progress update" || echo "No changes"
-          git push
+          git commit -m "Daily learning log update"
+          git push origin main
